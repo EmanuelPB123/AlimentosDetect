@@ -1,0 +1,1043 @@
+<html><head><base href="https://webchat-orpin.vercel.app/">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lector de Texto</title>
+<style>
+  body {
+    margin: 0;
+    padding: 20px;
+    font-family: Arial, sans-serif;
+    background: #f0f0f0;
+  }
+
+  .container {
+    max-width: 800px; /* Increased from 600px */
+    margin: 0 auto;
+    padding: 0 15px;
+  }
+
+  .camera-container {
+    width: 100%;
+    height: 250px; /* Reduced from 300px */
+    background: #000;
+    position: relative;
+    overflow: hidden;
+    border-radius: 10px;
+    margin-bottom: 15px; /* Reduced from 20px */
+  }
+
+  #video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  #canvas {
+    display: none;
+  }
+
+  .scan-line {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: #00ff00;
+    animation: scan 2s linear infinite;
+    box-shadow: 0 0 10px #00ff00;
+    z-index: 100;
+  }
+
+  @keyframes scan {
+    0% { top: 0; }
+    100% { top: 100%; }
+  }
+
+  .button {
+    background: #007bff;
+    color: white;
+    border: none;
+    padding: 12px 25px; /* Reduced padding */
+    border-radius: 25px;
+    font-size: 16px;
+    width: 100%;
+    margin-bottom: 8px; /* Reduced margin */
+    cursor: pointer;
+    transition: background 0.3s ease;
+  }
+
+  .button:hover {
+    background: #0056b3;
+  }
+
+  .button:active {
+    transform: scale(0.98);
+  }
+
+  .result {
+    background: white;
+    padding: 15px; /* Reduced from 20px */
+    border-radius: 10px;
+    margin-top: 15px; /* Reduced from 20px */
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+  }
+
+  .loading {
+    display: none;
+    text-align: center;
+    margin: 15px 0; /* Reduced from 20px */
+  }
+
+  .spinner {
+    width: 30px; /* Reduced from 40px */
+    height: 30px; /* Reduced from 40px */
+    border: 3px solid #f3f3f3; /* Reduced from 4px */
+    border-top: 3px solid #007bff; /* Reduced from 4px */
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  .text-detected {
+    animation: highlight 0.5s ease-in-out;
+  }
+
+  @keyframes highlight {
+    0% { transform: scale(1); background: #4CAF50; }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); background: white; }
+  }
+
+  .frame-guide {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 80%;
+    height: 100px;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    border-radius: 5px;
+    pointer-events: none;
+  }
+
+  #detectedText {
+    font-size: 20px; /* Reduced from 24px */
+    font-weight: bold;
+    text-align: center;
+    margin: 8px 0; /* Reduced margins */
+    color: #333;
+  }
+
+  #similarityText {
+    font-size: 16px; /* Reduced from 18px */
+    text-align: center;
+    color: #666;
+    margin-top: 8px; /* Reduced margin */
+  }
+
+  .camera-status {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    padding: 5px 10px;
+    background: rgba(0, 0, 0, 0.5);
+    color: white;
+    border-radius: 15px;
+    font-size: 12px;
+  }
+
+  .portions-container {
+    display: none;
+    margin-top: 15px; /* Reduced from 20px */
+    padding: 12px; /* Reduced from 15px */
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  }
+
+  .selector-container {
+    display: flex;
+    gap: 10px; /* Reduced from 15px */
+    margin-bottom: 15px; /* Reduced from 20px */
+  }
+
+  .dropdown {
+    flex: 1;
+    padding: 8px; /* Reduced from 10px */
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 14px; /* Reduced from 16px */
+    background: white;
+  }
+
+  .portion-result {
+    padding: 12px; /* Reduced from 15px */
+    background: #f8f9fa;
+    border-radius: 5px;
+    text-align: center;
+    font-weight: bold;
+    color: #333;
+    font-size: 14px; /* Add font size */
+  }
+
+  h2, h3 {
+    font-size: 18px; /* Adjust heading sizes */
+    margin: 10px 0;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Lector de Producto</h1>
+  
+  <div class="camera-container">
+    <video id="video" autoplay playsinline></video>
+    <div class="scan-line"></div>
+    <div class="frame-guide"></div>
+    <div class="camera-status" id="cameraStatus">Cámara Trasera</div>
+  </div>
+
+  <button class="button" id="startBtn">Iniciar Detección Continua</button>
+  <button class="button" id="stopBtn" style="display: none;">Detener Detección</button>
+  <button class="button" id="toggleCamera">Cambiar Cámara</button>
+
+  <div class="loading">
+    <div class="spinner"></div>
+    <p>Procesando imagen...</p>
+  </div>
+
+  <div class="result" id="result">
+    <h2>Texto detectado:</h2>
+    <p id="detectedText">-</p>
+    <p id="similarityText"></p>
+  </div>
+
+  <div class="portions-container" id="portionsContainer">
+    <h3>Recetas posibles según cantidad del ingrediente:</h3>
+    <div class="selector-container">
+      <select id="gramsSelect" class="dropdown">
+        <option value="">Gramos</option>
+        <option value="100">100g</option>
+        <option value="200">200g</option>
+        <option value="300">300g</option>
+        <option value="500">500g</option>
+        <option value="750">750g</option>
+        <option value="1000">1000g</option>
+        <option value="2000">2000g</option>
+      </select>
+
+      <select id="recipeSelect" class="dropdown">
+        <option value="">Seleccione receta</option>
+      </select>
+    </div>
+    
+    <div id="portionResult" class="portion-result">
+      Seleccione cantidad y receta para ver porciones
+    </div>
+  </div>
+
+  <canvas id="canvas"></canvas>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
+<script>
+let currentStream;
+let currentCamera = 'environment';
+let isProcessing = false;
+let detectionInterval;
+let lastDetectedText = '';
+const targetWords = ['MANZANA', 'PALMITOS', 'SPAGUETTI'];
+const similarityThreshold = 0.85;
+
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
+const toggleCamera = document.getElementById('toggleCamera');
+const loading = document.querySelector('.loading');
+const detectedText = document.getElementById('detectedText');
+const similarityText = document.getElementById('similarityText');
+const result = document.getElementById('result');
+const cameraStatus = document.getElementById('cameraStatus');
+const portionsContainer = document.getElementById('portionsContainer');
+
+const recipePortion = {
+  // Manzana recipes
+  compota: {
+    100: 1,
+    200: 2,
+    300: 3,
+    500: 5,
+    750: 7,
+    1000: 10,
+    2000: 20
+  },
+  pie: {
+    100: 1,
+    200: 2,
+    300: 3,
+    500: 4,
+    750: 6,
+    1000: 8,
+    2000: 16
+  },
+  // Palmitos recipes
+  ensalada: {
+    100: 2,
+    200: 4,
+    300: 6,
+    500: 10,
+    750: 15,
+    1000: 20,
+    2000: 40
+  },
+  salteado: {
+    100: 1,
+    200: 2,
+    300: 3,
+    500: 5,
+    750: 8,
+    1000: 10,
+    2000: 20
+  },
+  // Spaguetti recipes
+  carbonara: {
+    100: 1,
+    200: 2,
+    300: 3,
+    500: 5,
+    750: 7,
+    1000: 10,
+    2000: 20
+  },
+  bolognesa: {
+    100: 1,
+    200: 2,
+    300: 3,
+    500: 5,
+    750: 7,
+    1000: 10,
+    2000: 20
+  },
+  // Plátano recipes
+  batido: {
+    100: 1,
+    200: 2,
+    300: 3,
+    500: 4,
+    750: 6,
+    1000: 8,
+    2000: 16
+  },
+  frito: {
+    100: 1,
+    200: 2,
+    300: 3,
+    500: 5,
+    750: 7,
+    1000: 10,
+    2000: 20
+  },
+  // Fresa recipes
+  mermelada: {
+    100: 2,
+    200: 4,
+    300: 6,
+    500: 8,
+    750: 12,
+    1000: 16,
+    2000: 32
+  },
+  tarta: {
+    100: 1,
+    200: 2,
+    300: 3,
+    500: 4,
+    750: 6,
+    1000: 8,
+    2000: 16
+  },
+  // Zanahoria recipes
+  ensalada: {
+    100: 2,
+    200: 4,
+    300: 6,
+    500: 8,
+    750: 12,
+    1000: 16,
+    2000: 32
+  },
+  sopa: {
+    100: 1,
+    200: 2,
+    300: 3,
+    500: 5,
+    750: 7,
+    1000: 10,
+    2000: 20
+  },
+  // Jitomate recipes
+  salsa: {
+    100: 2,
+    200: 4,
+    300: 6,
+    500: 8,
+    750: 12,
+    1000: 16,
+    2000: 32
+  },
+  ensalada: {
+    100: 1,
+    200: 2,
+    300: 3,
+    500: 5,
+    750: 7,
+    1000: 10,
+    2000: 20
+  },
+  // Lechuga recipes
+  ensalada: {
+    100: 2,
+    200: 4,
+    300: 6,
+    500: 8,
+    750: 12,
+    1000: 16,
+    2000: 32
+  },
+  wrap: {
+    100: 1,
+    200: 2,
+    300: 3,
+    500: 5,
+    750: 7,
+    1000: 10,
+    2000: 20
+  },
+  // Pepino recipes
+  ensalada: {
+    100: 2,
+    200: 4,
+    300: 6,
+    500: 8,
+    750: 12,
+    1000: 16,
+    2000: 32
+  },
+  sándwich: {
+    100: 1,
+    200: 2,
+    300: 3,
+    500: 5,
+    750: 7,
+    1000: 10,
+    2000: 20
+  },
+  // Cebolla recipes
+  sopa: {
+    100: 2,
+    200: 4,
+    300: 6,
+    500: 8,
+    750: 12,
+    1000: 16,
+    2000: 32
+  },
+  aros: {
+    100: 1,
+    200: 2,
+    300: 3,
+    500: 5,
+    750: 7,
+    1000: 10,
+    2000: 20
+  },
+  // Papa recipes
+  puré: {
+    100: 2,
+    200: 4,
+    300: 6,
+    500: 8,
+    750: 12,
+    1000: 16,
+    2000: 32
+  },
+  frita: {
+    100: 1,
+    200: 2,
+    300: 3,
+    500: 5,
+    750: 7,
+    1000: 10,
+    2000: 20
+  },
+  // Coco recipes
+  leche: {
+    100: 2,
+    200: 4,
+    300: 6,
+    500: 8,
+    750: 12,
+    1000: 16,
+    2000: 32
+  },
+  postre: {
+    100: 1,
+    200: 2,
+    300: 3,
+    500: 5,
+    750: 7,
+    1000: 10,
+    2000: 20
+  },
+  // Piña recipes
+  jugo: {
+    100: 2,
+    200: 4,
+    300: 6,
+    500: 8,
+    750: 12,
+    1000: 16,
+    2000: 32
+  },
+  ensalada: {
+    100: 1,
+    200: 2,
+    300: 3,
+    500: 5,
+    750: 7,
+    1000: 10,
+    2000: 20
+  },
+  // Mango recipes
+  batido: {
+    100: 1,
+    200: 2,
+    300: 3,
+    500: 4,
+    750: 6,
+    1000: 8,
+    2000: 16
+  },
+  ensalada: {
+    100: 1,
+    200: 2,
+    300: 3,
+    500: 5,
+    750: 7,
+    1000: 10,
+    2000: 20
+  },
+  // Aguacate recipes
+  guacamole: {
+    100: 2,
+    200: 4,
+    300: 6,
+    500: 8,
+    750: 12,
+    1000: 16,
+    2000: 32
+  },
+  ensalada: {
+    100: 1,
+    200: 2,
+    300: 3,
+    500: 5,
+    750: 7,
+    1000: 10,
+    2000: 20
+  },
+  // Pescado recipes
+  horno: {
+    100: 1,
+    200: 2,
+    300: 3,
+    500: 5,
+    750: 7,
+    1000: 10,
+    2000: 20
+  },
+  frito: {
+    100: 1,
+    200: 2,
+    300: 3,
+    500: 5,
+    750: 7,
+    1000: 10,
+    2000: 20
+  },
+  // Pollo recipes
+  asado: {
+    100: 1,
+    200: 2,
+    300: 3,
+    500: 5,
+    750: 7,
+    1000: 10,
+    2000: 20
+  },
+  curry: {
+    100: 1,
+    200: 2,
+    300: 3,
+    500: 5,
+    750: 7,
+    1000: 10,
+    2000: 20
+  },
+  // Carne recipes
+  asado: {
+    100: 2,
+    200: 4,
+    300: 6,
+    500: 8,
+    750: 12,
+    1000: 16,
+    2000: 32
+  },
+  estofado: {
+    100: 1,
+    200: 2,
+    300: 3,
+    500: 5,
+    750: 7,
+    1000: 10,
+    2000: 20
+  },
+  // Huevo recipes
+  revuelto: {
+    100: 2,
+    200: 4,
+    300: 6,
+    500: 8,
+    750: 12,
+    1000: 16,
+    2000: 32
+  },
+  tortilla: {
+    100: 1,
+    200: 2,
+    300: 3,
+    500: 5,
+    750: 7,
+    1000: 10,
+    2000: 20
+  },
+  // Yogurt recipes
+  batido: {
+    100: 1,
+    200: 2,
+    300: 3,
+    500: 4,
+    750: 6,
+    1000: 8,
+    2000: 16
+  },
+  postre: {
+    100: 1,
+    200: 2,
+    300: 3,
+    500: 5,
+    750: 7,
+    1000: 10,
+    2000: 20
+  },
+  // Arroz recipes
+  arroz blanco: {
+    100: 1,
+    200: 2,
+    300: 3,
+    500: 5,
+    750: 7,
+    1000: 10,
+    2000: 20
+  },
+  arroz con leche: {
+    100: 2,
+    200: 4,
+    300: 6,
+    500: 8,
+    750: 12,
+    1000: 16,
+    2000: 32
+  }
+};
+
+
+const gramsSelect = document.getElementById('gramsSelect');
+const recipeSelect = document.getElementById('recipeSelect');
+const portionResult = document.getElementById('portionResult');
+
+gramsSelect.addEventListener('change', updatePortions);
+recipeSelect.addEventListener('change', updatePortions);
+
+function updatePortions() {
+  const grams = gramsSelect.value;
+  const recipe = recipeSelect.value;
+  
+  if (grams && recipe) {
+    const portions = recipePortion[recipe][grams];
+    portionResult.textContent = `Con ${grams}g del ingrediente puedes hacer ${portions} ${portions === 1 ? 'porción' : 'porciones'} de ${recipeSelect.options[recipeSelect.selectedIndex].text}`;
+  } else {
+    portionResult.textContent = 'Seleccione cantidad y receta para ver porciones';
+  }
+}
+
+function updateRecipeOptions(ingredient) {
+  const recipeSelect = document.getElementById('recipeSelect');
+  recipeSelect.innerHTML = '<option value="">Seleccione receta</option>';
+  
+  let recipes;
+  switch(ingredient) {
+    case 'MANZANA':
+      recipes = {
+        compota: 'Compota de manzana',
+        pie: 'Pie de manzana',
+        caramelizada: 'Manzana caramelizada',
+        strudel: 'Strudel de manzana',
+        tarta: 'Tarta de manzana',
+        pay: 'Pay de manzana',
+        pastel: 'Pastel de manzana'
+      };
+      break;
+    case 'PALMITOS':
+      recipes = {
+        ensalada: 'Ensalada de palmitos',
+        salteado: 'Palmitos salteados'
+      };
+      break;
+    case 'SPAGUETTI':
+      recipes = {
+        carbonara: 'Spaguetti Carbonara',
+        bolognesa: 'Spaguetti Bolognesa'
+      };
+      break;
+    case 'PLÁTANO':
+      recipes = {
+        batido: 'Batido de plátano',
+        frito: 'Plátano frito'
+      };
+      break;
+    case 'FRESA':
+      recipes = {
+        mermelada: 'Mermelada de fresa',
+        tarta: 'Tarta de fresa'
+      };
+      break;
+    case 'ZANAHORIA':
+      recipes = {
+        ensalada: 'Ensalada de zanahoria',
+        sopa: 'Sopa de zanahoria'
+      };
+      break;
+    case 'JITOMATE':
+      recipes = {
+        salsa: 'Salsa de jitomate',
+        ensalada: 'Ensalada de jitomate'
+      };
+      break;
+    case 'LECHUGA':
+      recipes = {
+        ensalada: 'Ensalada de lechuga',
+        wrap: 'Wrap de lechuga'
+      };
+      break;
+    case 'PEPINO':
+      recipes = {
+        ensalada: 'Ensalada de pepino',
+        sándwich: 'Sándwich de pepino'
+      };
+      break;
+    case 'CEBOLLA':
+      recipes = {
+        sopa: 'Sopa de cebolla',
+        aros: 'Aros de cebolla'
+      };
+      break;
+    case 'PAPA':
+      recipes = {
+        puré: 'Puré de papa',
+        frita: 'Papas fritas'
+      };
+      break;
+    case 'COCO':
+      recipes = {
+        leche: 'Leche de coco',
+        postre: 'Postre de coco'
+      };
+      break;
+    case 'PIÑA':
+      recipes = {
+        jugo: 'Jugo de piña',
+        ensalada: 'Ensalada de piña'
+      };
+      break;
+    case 'MANGO':
+      recipes = {
+        batido: 'Batido de mango',
+        ensalada: 'Ensalada de mango'
+      };
+      break;
+    case 'AGUACATE':
+      recipes = {
+        guacamole: 'Guacamole',
+        ensalada: 'Ensalada de aguacate'
+      };
+      break;
+    case 'PESCADO':
+      recipes = {
+        alHorno: 'Pescado al horno',
+        frito: 'Pescado frito'
+      };
+      break;
+    case 'POLLO':
+      recipes = {
+        asado: 'Pollo asado',
+        alCurry: 'Pollo al curry'
+      };
+      break;
+    case 'CARNE':
+      recipes = {
+        asado: 'Carne asada',
+        estofado: 'Estofado de carne'
+      };
+      break;
+    case 'HUEVO':
+      recipes = {
+        revuelto: 'Huevo revuelto',
+        tortilla: 'Tortilla de huevo'
+      };
+      break;
+    case 'YOGURT':
+      recipes = {
+        batido: 'Batido de yogurt',
+        postre: 'Postre de yogurt'
+      };
+      break;
+    case 'ARROZ':
+      recipes = {
+        blanco: 'Arroz blanco',
+        conLeche: 'Arroz con leche'
+      };
+      break;
+    case 'ALMENDRAS':
+      recipes = {
+        tostadas: 'Almendras tostadas',
+        galletas: 'Galletas de almendra'
+      };
+      break;
+    case 'NUECES':
+      recipes = {
+        galletas: 'Galletas de nuez',
+        tostadas: 'Nueces tostadas'
+      };
+      break;
+    case 'PASTEL':
+      recipes = {
+        vainilla: 'Pastel de vainilla',
+        chocolate: 'Pastel de chocolate'
+      };
+      break;
+    case 'GASEOSA':
+      recipes = {
+        limonada: 'Gaseosa con limón',
+        cola: 'Gaseosa de cola'
+      };
+      break;
+    case 'LIMÓN':
+      recipes = {
+        limonada: 'Limonada',
+        mermelada: 'Mermelada de limón'
+      };
+      break;
+    default:
+      recipes = {};
+  }
+  for (let [value, text] of Object.entries(recipes)) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = text;
+    recipeSelect.appendChild(option);
+  }
+}
+
+let worker = null;
+Tesseract.createWorker().then(w => {
+  worker = w;
+  worker.loadLanguage('eng').then(() => {
+    worker.initialize('eng');
+  });
+});
+
+async function processFrame() {
+  if (isProcessing || !worker) return;
+  isProcessing = true;
+
+  const ctx = canvas.getContext('2d');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  
+  ctx.drawImage(video, 0, 0);
+  
+  const cropWidth = canvas.width * 0.8;
+  const cropHeight = 100;
+  const cropX = (canvas.width - cropWidth) / 2;
+  const cropY = (canvas.height - cropHeight) / 2;
+  
+  const imageData = ctx.getImageData(cropX, cropY, cropWidth, cropHeight);
+  const tempCanvas = document.createElement('canvas');
+  tempCanvas.width = cropWidth;
+  tempCanvas.height = cropHeight;
+  tempCanvas.getContext('2d').putImageData(imageData, 0, 0);
+
+  try {
+    const { data: { text } } = await worker.recognize(tempCanvas);
+    
+    const possibleText = text
+      .split(/[\s\n]+/)
+      .map(word => word.trim())
+      .filter(word => /^[a-zA-Z0-9]{3,10}$/.test(word))
+      [0];
+
+    if (possibleText && possibleText !== lastDetectedText) {
+      lastDetectedText = possibleText;
+      
+      // Check similarity with all target words
+      let bestMatch = {
+        word: null,
+        similarity: 0
+      };
+      
+      for (const targetWord of targetWords) {
+        const similarity = calculateSimilarity(possibleText, targetWord);
+        if (similarity > bestMatch.similarity) {
+          bestMatch = {
+            word: targetWord,
+            similarity: similarity
+          };
+        }
+      }
+      
+      if (bestMatch.similarity >= similarityThreshold) {
+        detectedText.textContent = bestMatch.word;
+        similarityText.textContent = `Similitud: ${(bestMatch.similarity * 100).toFixed(2)}%`;
+        result.classList.remove('text-detected');
+        void result.offsetWidth;
+        result.classList.add('text-detected');
+        portionsContainer.style.display = 'block';
+        
+        // Update recipe options based on detected ingredient
+        updateRecipeOptions(bestMatch.word);
+        
+        stopContinuousDetection();
+        
+        if ('vibrate' in navigator) {
+          navigator.vibrate(200);
+        }
+      } else {
+        detectedText.textContent = '-';
+        similarityText.textContent = `Similitud: ${(bestMatch.similarity * 100).toFixed(2)}%`;
+        portionsContainer.style.display = 'none';
+      }
+    }
+  } catch (err) {
+    console.error('Error al procesar la imagen:', err);
+  }
+
+  isProcessing = false;
+}
+
+function calculateSimilarity(str1, str2) {
+  str1 = str1.toLowerCase();
+  str2 = str2.toLowerCase();
+  
+  if (str1.length === 0) return 0;
+  if (str2.length === 0) return 0;
+  
+  const matrix = Array(str2.length + 1).fill().map(() => Array(str1.length + 1).fill(0));
+  
+  for (let i = 0; i <= str1.length; i++) {
+    matrix[0][i] = i;
+  }
+  
+  for (let j = 0; j <= str2.length; j++) {
+    matrix[j][0] = j;
+  }
+  
+  for (let j = 1; j <= str2.length; j++) {
+    for (let i = 1; i <= str1.length; i++) {
+      const substitutionCost = str1[i - 1] === str2[j - 1] ? 0 : 1;
+      matrix[j][i] = Math.min(
+        matrix[j][i - 1] + 1,
+        matrix[j - 1][i] + 1,
+        matrix[j - 1][i - 1] + substitutionCost
+      );
+    }
+  }
+  
+  const maxLength = Math.max(str1.length, str2.length);
+  const similarity = 1 - (matrix[str2.length][str1.length] / maxLength);
+  return similarity;
+}
+
+async function setupCamera() {
+  if (currentStream) {
+    currentStream.getTracks().forEach(track => track.stop());
+  }
+
+  try {
+    const constraints = {
+      video: {
+        facingMode: currentCamera,
+        width: { ideal: 640 },
+        height: { ideal: 480 }
+      }
+    };
+
+    currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+    video.srcObject = currentStream;
+    cameraStatus.textContent = currentCamera === 'environment' ? 'Cámara Trasera' : 'Cámara Frontal';
+  } catch (err) {
+    console.error('Error al acceder a la cámara:', err);
+    alert('Error al acceder a la cámara. Asegúrate de dar permisos.');
+  }
+}
+
+function startContinuousDetection() {
+  startBtn.style.display = 'none';
+  stopBtn.style.display = 'block';
+  loading.style.display = 'block';
+  detectionInterval = setInterval(processFrame, 500);
+}
+
+function stopContinuousDetection() {
+  startBtn.style.display = 'block';
+  stopBtn.style.display = 'none';
+  loading.style.display = 'none';
+  clearInterval(detectionInterval);
+}
+
+toggleCamera.addEventListener('click', () => {
+  currentCamera = currentCamera === 'environment' ? 'user' : 'environment';
+  setupCamera();
+});
+
+startBtn.addEventListener('click', startContinuousDetection);
+stopBtn.addEventListener('click', stopContinuousDetection);
+
+setupCamera();
+
+window.onerror = function(msg, url, line, col, error) {
+  console.error('Error: ', msg, '\nURL: ', url, '\nLine: ', line, '\nColumn: ', col, '\nError object: ', error);
+  alert('Ocurrió un error. Por favor, recarga la página.');
+  return false;
+};
+</script>
+</body>
+</html>
